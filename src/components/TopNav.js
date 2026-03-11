@@ -4,9 +4,11 @@ import { Bell, Menu } from 'lucide-react';
 
 export default function TopNav({ setSidebarOpen }) {
   const [userName, setUserName] = useState('');
+  const [waId, setWaId] = useState('');
 
   useEffect(() => {
     setUserName(localStorage.getItem('wa_nama') || 'User');
+    setWaId(localStorage.getItem('wa_session') || '');
   }, []);
 
   return (
@@ -24,10 +26,13 @@ export default function TopNav({ setSidebarOpen }) {
           <Bell className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold uppercase shrink-0">
             {userName.charAt(0)}
           </div>
-          <span className="text-sm font-medium text-slate-700 hidden sm:block">{userName}</span>
+          <div className="hidden sm:flex flex-col">
+            <span className="text-sm font-semibold text-slate-700 leading-tight">{userName}</span>
+            <span className="text-[10px] text-slate-400 font-mono leading-tight">{waId.replace('@c.us', '').replace('@lid', '')}</span>
+          </div>
         </div>
       </div>
     </header>
