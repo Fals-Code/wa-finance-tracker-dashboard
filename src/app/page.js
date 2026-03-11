@@ -5,68 +5,118 @@ import { Wallet, LogIn } from 'lucide-react';
 
 function LoginContent() {
   const [waNumber, setWaNumber] = useState('');
+  const [authCode, setAuthCode] = useState('');
+  const [step, setStep] = useState('input_number'); // 'input_number' | 'input_code'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
     const autoId = searchParams.get('id');
     if (autoId) {
-      handleAutoLogin(autoId);
+      setWaNumber(autoId.split('@')[0]);
+      // Optional: Auto-trigger send code if ID is present
+      handleSendCode(null, autoId);
     }
   }, [searchParams]);
 
-  const handleAutoLogin = async (rawId) => {
-    setLoading(true);
-    setError('');
-
-    const { data: user, error: dbError } = await supabase
-      .from('user_profiles')
-      .select('nama')
-      .eq('wa_number', rawId)
-      .single();
-
-    if (dbError || !user) {
-      setError('ID WhatsApp tidak ditemukan. Pastikan kamu sudah chat bot.');
-      setLoading(false);
-      return;
-    }
-
-    localStorage.setItem('wa_session', rawId);
-    localStorage.setItem('wa_nama', user.nama);
-    router.push('/dashboard');
+  const generateCode = () => {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   };
 
-  const handleLogin = async (e) => {
+  const formatNumber = (num) => {
+    let formatted = num.replace(/[^0-9]/g, '');
+    if (formatted.startsWith('0')) {
+      formatted = '62' + formatted.slice(1);
+    }
+    if (!formatted.endsWith('@c.us')) {
+      formatted += '@c.us';
+    }
+    return formatted;
+  };
+
+  const handleSendCode = async (e, overrideNum = null) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    const targetNum = overrideNum || formatNumber(waNumber);
+    const newCode = generateCode();
+
+    try {
+      // 1. Check if user exists
+      const { data: user, error: dbError } = await supabase
+        .from('user_profiles')
+        .select('wa_number')
+        .eq('wa_number', targetNum)
+        .single();
+
+      if (dbError || !user) {
+        setError('Nomor WA belum terdaftar. Silakan chat bot WA terlebih dahulu.');
+        setLoading(false);
+        return;
+      }
+
+      // 2. Update authcode (this triggers the bot via Realtime)
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({ authcode: newCode })
+        .eq('wa_number', targetNum);
+
+      if (updateError) {
+        throw new Error('Gagal mengirim kode. Coba lagi nanti.');
+      }
+
+      setStep('input_code');
+      setSuccess('Kode autentikasi telah dikirim ke WhatsApp Anda.');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    let formattedWa = waNumber.replace(/[^0-9]/g, '');
-    if (formattedWa.startsWith('0')) {
-      formattedWa = '62' + formattedWa.slice(1);
-    }
-    const fullWa = formattedWa + '@c.us';
+    const targetNum = formatNumber(waNumber);
 
-    // Check if user exists in DB
-    const { data: user, error: dbError } = await supabase
-      .from('user_profiles')
-      .select('nama')
-      .eq('wa_number', fullWa)
-      .single();
+    try {
+      const { data: user, error: dbError } = await supabase
+        .from('user_profiles')
+        .select('nama, authcode, wa_number')
+        .eq('wa_number', targetNum)
+        .single();
 
-    if (dbError || !user) {
-      setError('Nomor WA belum terdaftar. Silakan chat bot WA terlebih dahulu.');
+      if (dbError || !user) {
+        setError('Data tidak ditemukan.');
+        setLoading(false);
+        return;
+      }
+
+      if (user.authcode !== authCode) {
+        setError('Kode autentikasi salah. Silakan periksa kembali.');
+        setLoading(false);
+        return;
+      }
+
+      // Clear authcode after success
+      await supabase.from('user_profiles').update({ authcode: null }).eq('wa_number', targetNum);
+
+      // Set session
+      localStorage.setItem('wa_session', user.wa_number);
+      localStorage.setItem('wa_nama', user.nama);
+      
+      router.push('/dashboard');
+    } catch (err) {
+      setError('Terjadi kesalahan saat verifikasi.');
       setLoading(false);
-      return;
     }
-
-    // Set session
-    localStorage.setItem('wa_session', fullWa);
-    localStorage.setItem('wa_nama', user.nama);
-    
-    router.push('/dashboard');
   };
 
   return (
@@ -79,43 +129,99 @@ function LoginContent() {
         <p className="text-sm text-gray-500 mt-2">Masuk untuk melihat laporan keuanganmu</p>
       </div>
 
-      <form onSubmit={handleLogin} className="space-y-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nomor WhatsApp
-          </label>
-          <input
-            type="text"
-            value={waNumber}
-            onChange={(e) => setWaNumber(e.target.value)}
-            placeholder="08123456789"
-            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
-            required
-          />
-          <p className="text-xs text-gray-500 mt-2">Gunakan nomor WA yang sudah terdaftar di bot</p>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center font-medium border border-red-100">
-            {error}
+      {step === 'input_number' ? (
+        <form onSubmit={handleSendCode} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Nomor WhatsApp
+            </label>
+            <input
+              type="text"
+              value={waNumber}
+              onChange={(e) => setWaNumber(e.target.value)}
+              placeholder="08123456789"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-slate-900"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-2">Gunakan nomor WA yang sudah terdaftar di bot</p>
           </div>
-        )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <>
-              <LogIn className="w-5 h-5" />
-              Masuk Dashboard
-            </>
+          {error && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center font-medium border border-red-100">
+              {error}
+            </div>
           )}
-        </button>
-      </form>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <>
+                <LogIn className="w-5 h-5" />
+                Dapatkan Kode Login
+              </>
+            )}
+          </button>
+        </form>
+      ) : (
+        <form onSubmit={handleVerifyCode} className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Kode Autentikasi
+            </label>
+            <input
+              type="text"
+              value={authCode}
+              onChange={(e) => setAuthCode(e.target.value)}
+              placeholder="Masukkan 6 digit kode"
+              maxLength={6}
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-center text-2xl tracking-widest font-bold text-slate-900"
+              required
+            />
+            <p className="text-xs text-center text-gray-500 mt-2">Masukkan kode yang dikirim bot ke nomor {waNumber}</p>
+          </div>
+
+          {success && (
+            <div className="p-3 bg-green-50 text-green-600 text-sm rounded-lg text-center font-medium border border-green-100">
+              {success}
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg text-center font-medium border border-red-100">
+              {error}
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  Verifikasi & Masuk
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setStep('input_number')}
+              className="w-full text-sm text-gray-500 hover:text-blue-600 transition-colors"
+            >
+              Ganti Nomor
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }
