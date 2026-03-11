@@ -43,32 +43,49 @@ function LoginContent() {
     setError('');
     setSuccess('');
 
-    const targetNum = overrideNum || formatNumber(waNumber);
+    const formattedDigits = waNumber.replace(/[^0-9]/g, '');
+    let searchDigit = formattedDigits;
+    if (searchDigit.startsWith('0')) {
+      searchDigit = '62' + searchDigit.slice(1);
+    }
+    
+    const targetNum = overrideNum || searchDigit;
     const newCode = generateCode();
 
     try {
-      // 1. Check if user exists
-      const { data: user, error: dbError } = await supabase
-        .from('user_profiles')
-        .select('wa_number')
-        .eq('wa_number', targetNum)
-        .single();
+      // 1. Check if user exists (Flexible matching)
+      let query = supabase.from('user_profiles').select('wa_number');
+      
+      if (overrideNum) {
+        query = query.eq('wa_number', overrideNum);
+      } else {
+        // Search for ID starting with the digits (supports @c.us, @lid, etc.)
+        query = query.ilike('wa_number', `${searchDigit}%`);
+      }
 
-      if (dbError || !user) {
+      const { data: users, error: dbError } = await query;
+
+      if (dbError || !users || users.length === 0) {
         setError('Nomor WA belum terdaftar. Silakan chat bot WA terlebih dahulu.');
         setLoading(false);
         return;
       }
 
+      // Use the first match (usually unique number part)
+      const foundWa = users[0].wa_number;
+
       // 2. Update authcode (this triggers the bot via Realtime)
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ authcode: newCode })
-        .eq('wa_number', targetNum);
+        .eq('wa_number', foundWa);
 
       if (updateError) {
         throw new Error('Gagal mengirim kode. Coba lagi nanti.');
       }
+
+      // Store the ACTUAL full ID for verification step
+      localStorage.setItem('temp_wa_id', foundWa);
 
       setStep('input_code');
       setSuccess('Kode autentikasi telah dikirim ke WhatsApp Anda.');
@@ -84,7 +101,14 @@ function LoginContent() {
     setLoading(true);
     setError('');
 
-    const targetNum = formatNumber(waNumber);
+    const targetNum = localStorage.getItem('temp_wa_id');
+
+    if (!targetNum) {
+      setError('Sesi kedaluwarsa. Silakan ulangi masukkan nomor.');
+      setStep('input_number');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { data: user, error: dbError } = await supabase
@@ -111,6 +135,7 @@ function LoginContent() {
       // Set session
       localStorage.setItem('wa_session', user.wa_number);
       localStorage.setItem('wa_nama', user.nama);
+      localStorage.removeItem('temp_wa_id');
       
       router.push('/dashboard');
     } catch (err) {
