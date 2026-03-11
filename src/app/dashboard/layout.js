@@ -1,11 +1,12 @@
 "use client";
 import Sidebar from '@/components/Sidebar';
 import TopNav from '@/components/TopNav';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function DashboardLayout({ children }) {
   const router = useRouter();
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     // Basic Auth Check
@@ -17,9 +18,9 @@ export default function DashboardLayout({ children }) {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      <Sidebar />
+      <Sidebar isOpen={isSidebarOpen} setOpen={setSidebarOpen} />
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <TopNav />
+        <TopNav setSidebarOpen={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/50 p-4 md:p-6 lg:p-8">
           <div className="max-w-6xl mx-auto">
             {children}

@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, Menu } from 'lucide-react';
 
-export default function TopNav() {
+export default function TopNav({ setSidebarOpen }) {
   const [userName, setUserName] = useState('');
 
   useEffect(() => {
@@ -12,7 +12,10 @@ export default function TopNav() {
   return (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 lg:px-8">
       <div className="flex items-center gap-4">
-        <button className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg">
+        <button 
+          onClick={setSidebarOpen}
+          className="md:hidden p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+        >
           <Menu className="w-6 h-6" />
         </button>
       </div>

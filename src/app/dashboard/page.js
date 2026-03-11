@@ -91,17 +91,17 @@ export default function DashboardOverview() {
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
   const StatCard = ({ title, value, icon: Icon, colorClass, subtitle }) => (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2">
-      <div className="flex items-center gap-3 text-slate-500 mb-2">
-        <div className={`p-2 rounded-lg ${colorClass} bg-opacity-10`}>
-          <Icon className={`w-5 h-5 ${colorClass.replace('bg-', 'text-')}`} />
+    <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-1 md:gap-2">
+      <div className="flex items-center gap-3 text-slate-500 mb-1 md:mb-2">
+        <div className={`p-1.5 md:p-2 rounded-lg ${colorClass} bg-opacity-10`}>
+          <Icon className={`w-4 h-4 md:w-5 md:h-5 ${colorClass.replace('bg-', 'text-')}`} />
         </div>
-        <span className="font-medium text-sm">{title}</span>
+        <span className="font-medium text-xs md:text-sm">{title}</span>
       </div>
-      <h3 className="text-3xl font-bold text-slate-800">
+      <h3 className="text-2xl md:text-3xl font-bold text-slate-800">
         Rp {value.toLocaleString('id-ID')}
       </h3>
-      {subtitle && <p className="text-sm text-slate-400 mt-1">{subtitle}</p>}
+      {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
     </div>
   );
 
@@ -144,10 +144,10 @@ export default function DashboardOverview() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pie Chart */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">Pengeluaran per Kategori</h2>
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-base md:text-lg font-bold text-slate-800 mb-4 md:mb-6">Pengeluaran per Kategori</h2>
           {data.pieData.length > 0 ? (
-            <div className="h-72">
+            <div className="h-64 md:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
@@ -180,10 +180,10 @@ export default function DashboardOverview() {
         </div>
 
         {/* Minimal Bar Chart - Top Kategori */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-lg font-bold text-slate-800 mb-6">Kategori Terbesar</h2>
+        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 lg:border-slate-100">
+          <h2 className="text-base md:text-lg font-bold text-slate-800 mb-4 md:mb-6">Kategori Terbesar</h2>
           {data.pieData.length > 0 ? (
-            <div className="h-72">
+            <div className="h-64 md:h-72">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={data.pieData.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
