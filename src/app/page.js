@@ -15,13 +15,12 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  useEffect(() => {
-    const autoId = searchParams.get("id");
-    if (autoId) {
-      setWaNumber(autoId.split("@")[0]);
-      handleSendCode(null, autoId);
-    }
-  }, [searchParams]);
+useEffect(() => {
+  const autoId = searchParams.get('id');
+  if (autoId) {
+    setWaNumber(autoId.split('@')[0]);
+  }
+}, [searchParams]);
 
   const generateCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -64,8 +63,8 @@ function LoginContent() {
 
       // RATE LIMIT 30 DETIK
       if (user.authcode_created_at) {
-        const createdAt = new Date(user.authcode_created_at);
-        const diffSeconds = (Date.now() - createdAt.getTime()) / 1000;
+        const createdAt = Number(user.authcode_created_at);
+        const diffSeconds = (Date.now() - createdAt) / 1000;
 
         if (diffSeconds < 30) {
           setError(
@@ -82,7 +81,7 @@ function LoginContent() {
         .from("user_profiles")
         .update({
           authcode: newCode,
-          authcode_created_at: new Date(),
+          authcode_created_at: Date.now(),
         })
         .eq("wa_number", foundWa);
 
@@ -129,8 +128,8 @@ function LoginContent() {
       }
 
       // EXPIRE CHECK (5 MENIT)
-      const createdAt = new Date(user.authcode_created_at);
-      const diffMinutes = (Date.now() - createdAt.getTime()) / 1000 / 60;
+      const createdAt = Number(user.authcode_created_at);
+      const diffMinutes = (Date.now() - createdAt) / 1000 / 60;
 
       if (diffMinutes > 5) {
         setError("Kode sudah kedaluwarsa. Silakan minta kode baru.");
