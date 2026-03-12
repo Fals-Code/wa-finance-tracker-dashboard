@@ -129,15 +129,18 @@ function LoginContent() {
         return;
       }
 
-      // EXPIRE CHECK
-      const createdAt = new Date(user.authcode_created_at).getTime();
-      const diffMinutes = (Date.now() - createdAt) / 1000 / 60;
+      // CEK EXPIRE 5 MENIT
+      const createdAt = new Date(user.authcode_created_at);
+      const now = new Date();
 
-      if (diffMinutes > 5) {
-        setError("Kode sudah kedaluwarsa. Silakan minta kode baru.");
-        setLoading(false);
-        return;
-      }
+      const diffMs = now.getTime() - createdAt.getTime();
+      const diffMinutes = diffMs / (1000 * 60);
+
+if (diffMinutes > 5 || diffMinutes < 0) {
+  setError("Kode sudah kedaluwarsa. Silakan minta kode baru.");
+  setLoading(false);
+  return;
+}
 
       if (user.authcode !== authCode) {
         setError("Kode autentikasi salah.");
