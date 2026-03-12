@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { Wallet } from "lucide-react";
 
 function LoginContent() {
+
   const [waNumber, setWaNumber] = useState("");
   const [authCode, setAuthCode] = useState("");
   const [step, setStep] = useState("input_number");
@@ -34,6 +35,7 @@ function LoginContent() {
     setSuccess("");
 
     try {
+
       const formattedDigits = waNumber.replace(/[^0-9]/g, "");
       let searchDigit = formattedDigits;
 
@@ -61,11 +63,7 @@ function LoginContent() {
         const diffSeconds = (Date.now() - createdAt) / 1000;
 
         if (diffSeconds < 30) {
-          setError(
-            `Tunggu ${Math.ceil(
-              30 - diffSeconds
-            )} detik sebelum meminta kode baru.`
-          );
+          setError(`Tunggu ${Math.ceil(30 - diffSeconds)} detik sebelum meminta kode baru.`);
           setLoading(false);
           return;
         }
@@ -78,11 +76,11 @@ function LoginContent() {
         .update({
           authcode: newCode,
           authcode_created_at: new Date(),
+          authcode_requested: true
         })
         .eq("wa_number", foundWa);
 
       if (updateError) {
-        console.error("SUPABASE UPDATE ERROR:", updateError);
         throw updateError;
       }
 
@@ -90,11 +88,16 @@ function LoginContent() {
 
       setStep("input_code");
       setSuccess("Kode login dikirim ke WhatsApp Anda.");
+
     } catch (err) {
+
       console.error("OTP ERROR:", err);
-      setError(err.message || "Terjadi kesalahan saat mengirim kode.");
+      setError("Terjadi kesalahan saat mengirim kode.");
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
@@ -104,6 +107,7 @@ function LoginContent() {
     setError("");
 
     try {
+
       const targetNum = localStorage.getItem("temp_wa_id");
 
       if (!targetNum) {
@@ -113,19 +117,19 @@ function LoginContent() {
         return;
       }
 
-      const { data: user, error: dbError } = await supabase
+      const { data: user } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("wa_number", targetNum)
         .single();
 
-      if (dbError || !user) {
+      if (!user) {
         setError("User tidak ditemukan.");
         setLoading(false);
         return;
       }
 
-      // CEK EXPIRE 5 MENIT
+      // EXPIRE CHECK
       const createdAt = new Date(user.authcode_created_at).getTime();
       const diffMinutes = (Date.now() - createdAt) / 1000 / 60;
 
@@ -141,12 +145,12 @@ function LoginContent() {
         return;
       }
 
-      // HAPUS OTP
       await supabase
         .from("user_profiles")
         .update({
           authcode: null,
           authcode_created_at: null,
+          authcode_requested: false
         })
         .eq("wa_number", targetNum);
 
@@ -156,22 +160,30 @@ function LoginContent() {
       localStorage.removeItem("temp_wa_id");
 
       router.push("/dashboard");
+
     } catch (err) {
+
       console.error("VERIFY ERROR:", err);
       setError("Terjadi kesalahan saat verifikasi.");
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
   return (
     <div className="max-w-md w-full bg-white p-8 rounded-2xl shadow-xl space-y-8">
+
       <div className="text-center">
         <div className="inline-flex items-center justify-center p-3 bg-blue-100 rounded-full mb-4">
           <Wallet className="w-8 h-8 text-blue-600" />
         </div>
 
-        <h2 className="text-2xl font-bold text-gray-900">Finance Tracker</h2>
+        <h2 className="text-2xl font-bold text-gray-900">
+          Finance Tracker
+        </h2>
 
         <p className="text-sm text-gray-500 mt-2">
           Masuk untuk melihat laporan keuanganmu
@@ -179,7 +191,9 @@ function LoginContent() {
       </div>
 
       {step === "input_number" ? (
+
         <form onSubmit={handleSendCode} className="space-y-6">
+
           <input
             type="text"
             value={waNumber}
@@ -200,9 +214,13 @@ function LoginContent() {
           >
             {loading ? "Mengirim..." : "Dapatkan Kode Login"}
           </button>
+
         </form>
+
       ) : (
+
         <form onSubmit={handleVerifyCode} className="space-y-6">
+
           <input
             type="text"
             value={authCode}
@@ -227,8 +245,11 @@ function LoginContent() {
           >
             {loading ? "Memverifikasi..." : "Verifikasi & Masuk"}
           </button>
+
         </form>
+
       )}
+
     </div>
   );
 }
