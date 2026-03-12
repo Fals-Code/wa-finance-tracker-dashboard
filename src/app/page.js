@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { Wallet, LogIn } from "lucide-react";
+import { Wallet } from "lucide-react";
 
 function LoginContent() {
   const [waNumber, setWaNumber] = useState("");
@@ -12,45 +12,39 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
   const router = useRouter();
   const searchParams = useSearchParams();
 
-useEffect(() => {
-  const autoId = searchParams.get('id');
-  if (autoId) {
-    setWaNumber(autoId.split('@')[0]);
-  }
-}, [searchParams]);
+  useEffect(() => {
+    const autoId = searchParams.get("id");
+    if (autoId) {
+      setWaNumber(autoId.split("@")[0]);
+    }
+  }, [searchParams]);
 
   const generateCode = () => {
     return Math.floor(100000 + Math.random() * 900000).toString();
   };
 
-  const handleSendCode = async (e, overrideNum = null) => {
-    if (e) e.preventDefault();
+  const handleSendCode = async (e) => {
+    e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess("");
 
-    const formattedDigits = waNumber.replace(/[^0-9]/g, "");
-    let searchDigit = formattedDigits;
-
-    if (searchDigit.startsWith("0")) {
-      searchDigit = "62" + searchDigit.slice(1);
-    }
-
-    const newCode = generateCode();
-
     try {
-      let query = supabase.from("user_profiles").select("*");
+      const formattedDigits = waNumber.replace(/[^0-9]/g, "");
+      let searchDigit = formattedDigits;
 
-      if (overrideNum) {
-        query = query.eq("wa_number", overrideNum);
-      } else {
-        query = query.ilike("wa_number", `${searchDigit}%`);
+      if (searchDigit.startsWith("0")) {
+        searchDigit = "62" + searchDigit.slice(1);
       }
 
-      const { data: users, error: dbError } = await query;
+      const { data: users, error: dbError } = await supabase
+        .from("user_profiles")
+        .select("*")
+        .ilike("wa_number", `${searchDigit}%`);
 
       if (dbError || !users || users.length === 0) {
         setError("Nomor WA belum terdaftar. Chat bot WA terlebih dahulu.");
@@ -63,7 +57,7 @@ useEffect(() => {
 
       // RATE LIMIT 30 DETIK
       if (user.authcode_created_at) {
-        const createdAt = Number(user.authcode_created_at);
+        const createdAt = new Date(user.authcode_created_at).getTime();
         const diffSeconds = (Date.now() - createdAt) / 1000;
 
         if (diffSeconds < 30) {
@@ -77,16 +71,19 @@ useEffect(() => {
         }
       }
 
+      const newCode = generateCode();
+
       const { error: updateError } = await supabase
         .from("user_profiles")
         .update({
           authcode: newCode,
-          authcode_created_at: Date.now(),
+          authcode_created_at: new Date(),
         })
         .eq("wa_number", foundWa);
 
       if (updateError) {
-        throw new Error("Gagal mengirim kode.");
+        console.error("SUPABASE UPDATE ERROR:", updateError);
+        throw updateError;
       }
 
       localStorage.setItem("temp_wa_id", foundWa);
@@ -94,7 +91,8 @@ useEffect(() => {
       setStep("input_code");
       setSuccess("Kode login dikirim ke WhatsApp Anda.");
     } catch (err) {
-      setError("Terjadi kesalahan saat mengirim kode.");
+      console.error("OTP ERROR:", err);
+      setError(err.message || "Terjadi kesalahan saat mengirim kode.");
     } finally {
       setLoading(false);
     }
@@ -105,16 +103,16 @@ useEffect(() => {
     setLoading(true);
     setError("");
 
-    const targetNum = localStorage.getItem("temp_wa_id");
-
-    if (!targetNum) {
-      setError("Sesi habis. Masukkan nomor lagi.");
-      setStep("input_number");
-      setLoading(false);
-      return;
-    }
-
     try {
+      const targetNum = localStorage.getItem("temp_wa_id");
+
+      if (!targetNum) {
+        setError("Sesi habis. Masukkan nomor lagi.");
+        setStep("input_number");
+        setLoading(false);
+        return;
+      }
+
       const { data: user, error: dbError } = await supabase
         .from("user_profiles")
         .select("*")
@@ -127,8 +125,8 @@ useEffect(() => {
         return;
       }
 
-      // EXPIRE CHECK (5 MENIT)
-      const createdAt = Number(user.authcode_created_at);
+      // CEK EXPIRE 5 MENIT
+      const createdAt = new Date(user.authcode_created_at).getTime();
       const diffMinutes = (Date.now() - createdAt) / 1000 / 60;
 
       if (diffMinutes > 5) {
@@ -143,7 +141,7 @@ useEffect(() => {
         return;
       }
 
-      // HAPUS OTP (SEKALI PAKAI)
+      // HAPUS OTP
       await supabase
         .from("user_profiles")
         .update({
@@ -159,10 +157,11 @@ useEffect(() => {
 
       router.push("/dashboard");
     } catch (err) {
+      console.error("VERIFY ERROR:", err);
       setError("Terjadi kesalahan saat verifikasi.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (
@@ -171,7 +170,9 @@ useEffect(() => {
         <div className="inline-flex items-center justify-center p-3 bg-blue-100 rounded-full mb-4">
           <Wallet className="w-8 h-8 text-blue-600" />
         </div>
+
         <h2 className="text-2xl font-bold text-gray-900">Finance Tracker</h2>
+
         <p className="text-sm text-gray-500 mt-2">
           Masuk untuk melihat laporan keuanganmu
         </p>
