@@ -22,26 +22,18 @@ function LoginContent() {
     if (autoId) setWaNumber(autoId.split("@")[0]);
   }, [searchParams]);
 
-  // Countdown timer rate-limit
   useEffect(() => {
     if (countdown <= 0) return;
     const t = setTimeout(() => setCountdown(c => c - 1), 1000);
     return () => clearTimeout(t);
   }, [countdown]);
 
-  function generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  }
-
   function normalizeWa(raw) {
     const digits = raw.replace(/[^0-9]/g, "");
     return digits.startsWith("0") ? "62" + digits.slice(1) : digits;
   }
 
-  // ─── KIRIM KODE: Update Supabase → Bot detect via Realtime → Kirim WA ──────
-  // Fix: Tidak lagi POST ke /api/send-login-code (bot lokal tidak bisa diakses
-  // dari Vercel). Cukup update authcode_requested di Supabase, bot sudah
-  // subscribe Realtime dan akan otomatis kirim OTP ke WA.
+  // ─── KIRIM KODE via API Route (server-side, aman) ─────────────────────────
   const handleSendCode = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -51,61 +43,34 @@ function LoginContent() {
     try {
       const searchDigit = normalizeWa(waNumber);
 
-      // Cari user berdasarkan nomor WA
-      const { data: users, error: dbError } = await supabase
-        .from("user_profiles")
-        .select("wa_number, authcode_created_at")
-        .or(`wa_number.eq.${searchDigit}@c.us,wa_number.ilike.${searchDigit}%`)
-        .limit(1);
+      const res = await fetch("/api/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ waNumber: searchDigit }),
+      });
 
-      if (dbError || !users || users.length === 0) {
-        setError("Nomor WA belum terdaftar. Chat bot WA terlebih dahulu.");
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Terjadi kesalahan.");
+        if (data.countdown) setCountdown(data.countdown);
         setLoading(false);
         return;
       }
 
-      const user = users[0];
-
-      // Rate limit 30 detik
-      if (user.authcode_created_at) {
-        const diff = (Date.now() - new Date(user.authcode_created_at).getTime()) / 1000;
-        if (diff < 30) {
-          const sisa = Math.ceil(30 - diff);
-          setError(`Tunggu ${sisa} detik sebelum minta kode baru.`);
-          setCountdown(sisa);
-          setLoading(false);
-          return;
-        }
-      }
-
-      const newCode = generateCode();
-
-      // Update langsung ke Supabase
-      // Bot sudah subscribe Realtime → otomatis kirim OTP ke WA
-      const { error: updateError } = await supabase
-        .from("user_profiles")
-        .update({
-          authcode: newCode,
-          authcode_created_at: new Date().toISOString(),
-          authcode_requested: true,
-        })
-        .eq("wa_number", user.wa_number);
-
-      if (updateError) throw updateError;
-
-      localStorage.setItem("temp_wa_id", user.wa_number);
+      localStorage.setItem("temp_wa_id", data.wa_number);
       setStep("input_code");
-      setSuccess("Kode OTP telah dikirim ke WhatsApp kamu!");
+      setSuccess(data.message || "Kode OTP dikirim ke WhatsApp kamu!");
 
     } catch (err) {
       console.error("Send code error:", err);
-      setError("Terjadi kesalahan. Coba lagi.");
+      setError("Tidak bisa terhubung ke server. Coba lagi.");
     } finally {
       setLoading(false);
     }
   };
 
-  // ─── VERIFIKASI KODE ──────────────────────────────────────────────────────
+  // ─── VERIFIKASI KODE (langsung cek Supabase) ──────────────────────────────
   const handleVerifyCode = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -120,21 +85,21 @@ function LoginContent() {
         return;
       }
 
-      const { data: user } = await supabase
+      const { data: user, error: fetchErr } = await supabase
         .from("user_profiles")
         .select("*")
         .eq("wa_number", targetNum)
         .single();
 
-      if (!user) {
+      if (fetchErr || !user) {
         setError("User tidak ditemukan.");
         setLoading(false);
         return;
       }
 
       // Cek expire 10 menit
-      const raw        = user.authcode_created_at;
-      const normalized = raw?.endsWith("Z") ? raw : raw?.replace(" ", "T") + "Z";
+      const raw         = user.authcode_created_at;
+      const normalized  = raw?.endsWith("Z") ? raw : raw?.replace(" ", "T") + "Z";
       const diffMinutes = (Date.now() - new Date(normalized).getTime()) / 60000;
 
       if (diffMinutes > 10 || diffMinutes < -2) {
@@ -183,7 +148,6 @@ function LoginContent() {
 
       {step === "input_number" ? (
 
-        /* ── FORM NOMOR WA ─────────────────────────────────────── */
         <form onSubmit={handleSendCode} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -224,7 +188,6 @@ function LoginContent() {
 
       ) : (
 
-        /* ── FORM KODE OTP ─────────────────────────────────────── */
         <form onSubmit={handleVerifyCode} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
