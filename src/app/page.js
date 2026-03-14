@@ -129,13 +129,25 @@ function LoginContent() {
         return;
       }
 
-      // CEK EXPIRE 15 MENIT (Toleransi penuh terhadap clock-drift)
-      const createdAt = new Date(user.authcode_created_at).getTime();
-      const now = Date.now();
-      const diffMinutes = (now - createdAt) / (1000 * 60);
+      // CEK EXPIRE (Force UTC Comparison)
+      // Ensure we parse the DB time correctly and compare with current UTC time
+      const createdAtStr = user.authcode_created_at;
+      // If it doesn't end with Z, append it to force UTC parsing if it was stored without timezone
+      const normalizedCreatedStr = createdAtStr.endsWith('Z') ? createdAtStr : createdAtStr.replace(' ', 'T') + 'Z';
+      
+      const createdAtMill = new Date(normalizedCreatedStr).getTime();
+      const nowMill = Date.now();
+      const diffMinutes = (nowMill - createdAtMill) / (1000 * 60);
 
-      if (diffMinutes > 15) {
-        setError("Kode sudah kedaluwarsa. Silakan minta kode baru.");
+      console.log("OTP Final Fix Debug:", {
+        raw: createdAtStr,
+        normalized: normalizedCreatedStr,
+        diffMinutes: diffMinutes
+      });
+
+      // Relaxed check: 10 minutes is plenty for OTP
+      if (diffMinutes > 10 || diffMinutes < -2) {
+        setError(`Kode sudah kedaluwarsa. Silakan minta kode baru.`);
         setLoading(false);
         return;
       }
