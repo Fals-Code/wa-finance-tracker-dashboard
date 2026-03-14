@@ -90,20 +90,24 @@ export default function DashboardOverview() {
 
   const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
 
-  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle }) => (
-    <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-1 md:gap-2">
+  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle, warning }) => (
+    <div className={`bg-white p-4 md:p-6 rounded-2xl shadow-sm border ${warning ? 'border-red-200' : 'border-slate-100'} flex flex-col gap-1 md:gap-2`}>
       <div className="flex items-center gap-3 text-slate-500 mb-1 md:mb-2">
         <div className={`p-1.5 md:p-2 rounded-lg ${colorClass} bg-opacity-10`}>
           <Icon className={`w-4 h-4 md:w-5 md:h-5 ${colorClass.replace('bg-', 'text-')}`} />
         </div>
         <span className="font-medium text-xs md:text-sm">{title}</span>
       </div>
-      <h3 className="text-2xl md:text-3xl font-bold text-slate-800">
-        Rp {value.toLocaleString('id-ID')}
+      <h3 className={`text-2xl md:text-3xl font-bold ${warning ? 'text-red-600' : 'text-slate-800'}`}>
+        {warning ? '- ' : ''}Rp {Math.abs(value).toLocaleString('id-ID')}
       </h3>
       {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
+      {warning && <p className="text-xs text-red-500 font-medium mt-1">⚠️ Budget terlampaui!</p>}
     </div>
   );
+
+  const sisaBudget = data.budget > 0 ? data.budget - data.totalKeluar : 0;
+  const budgetPct = data.budget > 0 ? Math.round((data.totalKeluar / data.budget) * 100) : 0;
 
   return (
     <div className="space-y-6">
@@ -133,11 +137,16 @@ export default function DashboardOverview() {
           colorClass="bg-red-500" 
         />
         <StatCard 
-          title="Sisa Budget" 
-          value={data.budget > 0 ? data.budget - data.totalKeluar : 0} 
+          title="Sisa Budget Bulan Ini" 
+          value={sisaBudget < 0 ? 0 : sisaBudget}
           icon={Target} 
-          colorClass="bg-amber-500" 
-          subtitle={data.budget > 0 ? `Dari total Rp ${data.budget.toLocaleString('id-ID')}` : 'Belum atur budget'}
+          colorClass={budgetPct >= 90 ? "bg-red-500" : budgetPct >= 75 ? "bg-amber-500" : "bg-emerald-500"}
+          subtitle={
+            data.budget > 0 
+              ? `${budgetPct}% terpakai dari Rp ${data.budget.toLocaleString('id-ID')}`
+              : 'Belum set budget · Ketik "budget" di bot'
+          }
+          warning={sisaBudget < 0}
         />
       </div>
 
