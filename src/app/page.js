@@ -75,7 +75,7 @@ function LoginContent() {
         .from("user_profiles")
         .update({
           authcode: newCode,
-          authcode_created_at: new Date(),
+          authcode_created_at: new Date().toISOString(),
           authcode_requested: true
         })
         .eq("wa_number", foundWa);
@@ -129,14 +129,12 @@ function LoginContent() {
         return;
       }
 
-      // CEK EXPIRE 5 MENIT (Toleransi clock-drift 2 menit)
-      const createdAt = new Date(user.authcode_created_at);
-      const now = new Date();
+      // CEK EXPIRE 15 MENIT (Toleransi penuh terhadap clock-drift)
+      const createdAt = new Date(user.authcode_created_at).getTime();
+      const now = Date.now();
+      const diffMinutes = (now - createdAt) / (1000 * 60);
 
-      const diffMs = now.getTime() - createdAt.getTime();
-      const diffMinutes = diffMs / (1000 * 60);
-
-      if (diffMinutes > 5 || diffMinutes < -2) {
+      if (diffMinutes > 15) {
         setError("Kode sudah kedaluwarsa. Silakan minta kode baru.");
         setLoading(false);
         return;
