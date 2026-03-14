@@ -1,15 +1,175 @@
 "use client";
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { ArrowDownRight, ArrowUpRight, Wallet, Target } from 'lucide-react';
 import {
-  PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid
+  ArrowDownRight, ArrowUpRight, Wallet, Target,
+  TrendingUp, TrendingDown, Calendar, Activity,
+  AlertTriangle, CheckCircle2, Clock, Zap
+} from 'lucide-react';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer,
+  Tooltip as RechartsTooltip, Legend,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar
 } from 'recharts';
 
+// ─── Warna kategori ───────────────────────────────────────────────────────────
+const COLORS = [
+  '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
+  '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'
+];
+
+// ─── Formatter ────────────────────────────────────────────────────────────────
+const fmtRp = (val) =>
+  new Intl.NumberFormat('id-ID', {
+    style: 'currency', currency: 'IDR',
+    maximumFractionDigits: 0
+  }).format(val || 0);
+
+const fmtShort = (val) => {
+  if (val >= 1_000_000) return `Rp ${(val / 1_000_000).toFixed(1)}jt`;
+  if (val >= 1_000)     return `Rp ${(val / 1_000).toFixed(0)}k`;
+  return `Rp ${val}`;
+};
+
+// ─── Komponen Badge Status Budget ────────────────────────────────────────────
+function BudgetBadge({ pct }) {
+  if (pct === 0) return null;
+  if (pct >= 100) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+      <AlertTriangle className="w-3 h-3" /> Budget habis!
+    </span>
+  );
+  if (pct >= 90) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+      <AlertTriangle className="w-3 h-3" /> Hampir habis
+    </span>
+  );
+  if (pct >= 75) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">
+      <Activity className="w-3 h-3" /> {pct}% terpakai
+    </span>
+  );
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+      <CheckCircle2 className="w-3 h-3" /> Aman · {pct}%
+    </span>
+  );
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+function StatCard({ title, value, icon: Icon, trend, subtitle, badge, variant = 'default' }) {
+  const variants = {
+    default : 'bg-white border-slate-100',
+    danger  : 'bg-red-50 border-red-200',
+    success : 'bg-emerald-50 border-emerald-100',
+    warning : 'bg-amber-50 border-amber-100',
+  };
+  const iconBg = {
+    default : 'bg-blue-50 text-blue-600',
+    danger  : 'bg-red-100 text-red-600',
+    success : 'bg-emerald-100 text-emerald-600',
+    warning : 'bg-amber-100 text-amber-700',
+  };
+
+  return (
+    <div className={`relative overflow-hidden rounded-2xl border shadow-sm p-5 md:p-6 flex flex-col gap-3 ${variants[variant]}`}>
+      {/* Decorative bg circle */}
+      <div className="absolute -top-4 -right-4 w-24 h-24 rounded-full opacity-5 bg-current" />
+
+      <div className="flex items-center justify-between">
+        <div className={`p-2 rounded-xl ${iconBg[variant]}`}>
+          <Icon className="w-5 h-5" />
+        </div>
+        {badge}
+      </div>
+
+      <div>
+        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+        <p className={`text-2xl md:text-3xl font-bold tracking-tight ${variant === 'danger' ? 'text-red-600' : 'text-slate-800'}`}>
+          {value}
+        </p>
+      </div>
+
+      {(subtitle || trend !== undefined) && (
+        <div className="flex items-center gap-2 pt-1 border-t border-slate-100">
+          {trend !== undefined && trend !== null && (
+            <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${trend >= 0 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {trend >= 0
+                ? <TrendingUp className="w-3 h-3" />
+                : <TrendingDown className="w-3 h-3" />
+              }
+              {Math.abs(trend)}%
+            </span>
+          )}
+          {subtitle && <p className="text-xs text-slate-400 truncate">{subtitle}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Mini Progress Bar ─────────────────────────────────────────────────────────
+function MiniBar({ value, max, color = 'bg-blue-500' }) {
+  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0;
+  return (
+    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+      <div
+        className={`h-full rounded-full transition-all duration-700 ${color}`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-sm">
+      {label && <p className="font-semibold text-slate-700 mb-1">{label}</p>}
+      {payload.map((p, i) => (
+        <p key={i} style={{ color: p.color }} className="font-medium">
+          {p.name}: {fmtShort(p.value)}
+        </p>
+      ))}
+    </div>
+  );
+};
+
+// ─── Generate last 7 days for area chart ─────────────────────────────────────
+function buildDailyData(rows) {
+  const now = new Date();
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const key = d.toISOString().split('T')[0];
+    const label = d.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric' });
+    days.push({ key, label, keluar: 0, masuk: 0 });
+  }
+  rows.forEach(r => {
+    const entry = days.find(d => d.key === r.tanggal);
+    if (entry) {
+      if (r.tipe === 'masuk') entry.masuk += parseInt(r.nominal || 0);
+      else entry.keluar += parseInt(r.nominal || 0);
+    }
+  });
+  return days;
+}
+
+// ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function DashboardOverview() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [greeting, setGreeting] = useState('');
+  const [userName, setUserName] = useState('');
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? '☀️ Selamat pagi' : hour < 17 ? '🌤 Selamat siang' : '🌙 Selamat malam');
+    setUserName(localStorage.getItem('wa_nama') || 'Pengguna');
+  }, []);
 
   useEffect(() => {
     async function fetchData() {
@@ -19,61 +179,71 @@ export default function DashboardOverview() {
       const now = new Date();
       const firstDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
       const bulanKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const bulanNama = now.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
 
-      // 1. Ambil Budget
-      const { data: budgetData } = await supabase
-        .from('user_budgets')
-        .select('budget')
-        .eq('wa_number', wa)
-        .eq('bulan', bulanKey)
-        .single();
-      
-      const budget = budgetData?.budget || 0;
+      // Ambil data paralel
+      const [budgetRes, trxRes, allTrxRes] = await Promise.all([
+        supabase.from('user_budgets').select('budget')
+          .eq('wa_number', wa).eq('bulan', bulanKey).single(),
+        supabase.from('transaksi').select('nominal,tipe,kategori,tanggal,judul,nama_toko,deskripsi')
+          .eq('wa_number', wa).gte('tanggal', firstDay).order('tanggal', { ascending: true }),
+        supabase.from('transaksi').select('nominal,tipe')
+          .eq('wa_number', wa)
+      ]);
 
-      // 2. Ambil Transaksi Bulan Ini
-      const { data: trx } = await supabase
-        .from('transaksi')
-        .select('nominal, tipe, kategori, tanggal')
-        .eq('wa_number', wa)
-        .gte('tanggal', firstDay);
+      const budget  = budgetRes.data?.budget || 0;
+      const rows    = trxRes.data || [];
+      const allRows = allTrxRes.data || [];
 
-      let totalMasuk = 0;
-      let totalKeluar = 0;
+      // Hitung totals bulan ini
+      let totalMasuk = 0, totalKeluar = 0;
       const categoryMap = {};
-
-      (trx || []).forEach(t => {
+      rows.forEach(t => {
         const nom = parseInt(t.nominal);
-        if (t.tipe === 'masuk') {
-          totalMasuk += nom;
-        } else {
+        if (t.tipe === 'masuk') totalMasuk += nom;
+        else {
           totalKeluar += nom;
-          categoryMap[t.kategori] = (categoryMap[t.kategori] || 0) + nom;
+          const kat = t.kategori || 'Lain-lain';
+          categoryMap[kat] = (categoryMap[kat] || 0) + nom;
         }
       });
 
-      const pieData = Object.keys(categoryMap).map(k => ({
-        name: k || 'Lainnya',
-        value: categoryMap[k]
-      })).sort((a,b) => b.value - a.value);
-
-      // 3. Ambil total saldo All Time (hanya opsional, ini simulasi sederhana dari bulan ini + asumsi jika ada riwayat. Untuk akurasi, ambil tanpa filter tanggal)
-      const { data: allTrx } = await supabase
-        .from('transaksi')
-        .select('nominal, tipe')
-        .eq('wa_number', wa);
-      
+      // All time saldo
       let saldo = 0;
-      (allTrx || []).forEach(t => {
-        if (t.tipe === 'masuk') saldo += parseInt(t.nominal);
-        else saldo -= parseInt(t.nominal);
+      allRows.forEach(t => {
+        const nom = parseInt(t.nominal || 0);
+        if (t.tipe === 'masuk') saldo += nom;
+        else saldo -= nom;
       });
 
+      // Pie data
+      const pieData = Object.entries(categoryMap)
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+      // Daily chart data (7 hari)
+      const dailyData = buildDailyData(rows);
+
+      // Budget info
+      const budgetPct = budget > 0 ? Math.min(100, Math.round((totalKeluar / budget) * 100)) : 0;
+      const sisaBudget = budget > 0 ? budget - totalKeluar : 0;
+
+      // Sisa hari bulan ini
+      const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const sisaHari = lastDayOfMonth - now.getDate();
+
+      // Rata-rata pengeluaran harian
+      const rataHari = now.getDate() > 0 ? Math.round(totalKeluar / now.getDate()) : 0;
+
+      // Prediksi akhir bulan
+      const prediksiAkhir = rataHari * lastDayOfMonth;
+
       setData({
-        saldo,
-        totalMasuk,
-        totalKeluar,
-        budget,
-        pieData
+        saldo, totalMasuk, totalKeluar,
+        budget, budgetPct, sisaBudget,
+        pieData, dailyData,
+        bulanNama, sisaHari, rataHari, prediksiAkhir,
+        txCount: rows.length,
       });
       setLoading(false);
     }
@@ -82,142 +252,394 @@ export default function DashboardOverview() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-3">
+        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+        <p className="text-sm text-slate-400 animate-pulse">Memuat data keuangan...</p>
       </div>
     );
   }
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#64748b'];
+  if (!data) return null;
 
-  const StatCard = ({ title, value, icon: Icon, colorClass, subtitle, warning }) => (
-    <div className={`bg-white p-4 md:p-6 rounded-2xl shadow-sm border ${warning ? 'border-red-200' : 'border-slate-100'} flex flex-col gap-1 md:gap-2`}>
-      <div className="flex items-center gap-3 text-slate-500 mb-1 md:mb-2">
-        <div className={`p-1.5 md:p-2 rounded-lg ${colorClass} bg-opacity-10`}>
-          <Icon className={`w-4 h-4 md:w-5 md:h-5 ${colorClass.replace('bg-', 'text-')}`} />
-        </div>
-        <span className="font-medium text-xs md:text-sm">{title}</span>
-      </div>
-      <h3 className={`text-2xl md:text-3xl font-bold ${warning ? 'text-red-600' : 'text-slate-800'}`}>
-        {warning ? '- ' : ''}Rp {Math.abs(value).toLocaleString('id-ID')}
-      </h3>
-      {subtitle && <p className="text-xs text-slate-400 mt-1">{subtitle}</p>}
-      {warning && <p className="text-xs text-red-500 font-medium mt-1">⚠️ Budget terlampaui!</p>}
-    </div>
-  );
-
-  const sisaBudget = data.budget > 0 ? data.budget - data.totalKeluar : 0;
-  const budgetPct = data.budget > 0 ? Math.round((data.totalKeluar / data.budget) * 100) : 0;
+  const budgetVariant =
+    data.budgetPct >= 100 ? 'danger'
+    : data.budgetPct >= 90 ? 'warning'
+    : 'success';
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-800">Ringkasan Keuangan</h1>
-        <p className="text-sm text-slate-500 font-medium">Bulan Ini</p>
+    <div className="space-y-6 pb-8">
+
+      {/* ── HEADER ──────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
+        <div>
+          <p className="text-sm text-slate-400 font-medium">{greeting},</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-800">{userName} 👋</h1>
+          <p className="text-sm text-slate-400 mt-1 flex items-center gap-1">
+            <Calendar className="w-3.5 h-3.5" />
+            Periode: {data.bulanNama} · {data.txCount} transaksi · ⏳ sisa {data.sisaHari} hari
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1.5 rounded-full">
+            📊 Live
+          </span>
+        </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Saldo (All Time)" 
-          value={data.saldo} 
-          icon={Wallet} 
-          colorClass="bg-blue-600" 
+      {/* ── STAT CARDS ──────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+
+        <StatCard
+          title="Saldo Keseluruhan"
+          value={fmtRp(data.saldo)}
+          icon={Wallet}
+          variant={data.saldo < 0 ? 'danger' : 'default'}
+          subtitle="Akumulasi semua waktu"
         />
-        <StatCard 
-          title="Pemasukan Bulan Ini" 
-          value={data.totalMasuk} 
-          icon={ArrowUpRight} 
-          colorClass="bg-emerald-500" 
+
+        <StatCard
+          title="Pemasukan Bulan Ini"
+          value={fmtRp(data.totalMasuk)}
+          icon={ArrowUpRight}
+          variant="success"
+          subtitle={data.txCount > 0 ? `${data.txCount} transaksi total` : 'Belum ada data'}
         />
-        <StatCard 
-          title="Pengeluaran Bulan Ini" 
-          value={data.totalKeluar} 
-          icon={ArrowDownRight} 
-          colorClass="bg-red-500" 
+
+        <StatCard
+          title="Pengeluaran Bulan Ini"
+          value={fmtRp(data.totalKeluar)}
+          icon={ArrowDownRight}
+          variant={data.totalKeluar > data.totalMasuk && data.totalMasuk > 0 ? 'danger' : 'default'}
+          subtitle={`Rata-rata ${fmtShort(data.rataHari)}/hari`}
         />
-        <StatCard 
-          title="Sisa Budget Bulan Ini" 
-          value={sisaBudget < 0 ? 0 : sisaBudget}
-          icon={Target} 
-          colorClass={budgetPct >= 90 ? "bg-red-500" : budgetPct >= 75 ? "bg-amber-500" : "bg-emerald-500"}
+
+        <StatCard
+          title={data.budget > 0 ? 'Sisa Budget' : 'Budget Bulanan'}
+          value={data.budget > 0 ? fmtRp(Math.max(0, data.sisaBudget)) : 'Belum diset'}
+          icon={Target}
+          variant={budgetVariant}
+          badge={<BudgetBadge pct={data.budgetPct} />}
           subtitle={
-            data.budget > 0 
-              ? `${budgetPct}% terpakai dari Rp ${data.budget.toLocaleString('id-ID')}`
-              : 'Belum set budget · Ketik "budget" di bot'
+            data.budget > 0
+              ? `${fmtShort(data.totalKeluar)} dari ${fmtShort(data.budget)} (${data.budgetPct}%)`
+              : 'Ketik "budget" di bot untuk mengatur'
           }
-          warning={sisaBudget < 0}
         />
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Pie Chart */}
-        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-base md:text-lg font-bold text-slate-800 mb-4 md:mb-6">Pengeluaran per Kategori</h2>
+      {/* ── BUDGET PROGRESS BAR (hanya kalau budget sudah diset) ── */}
+      {data.budget > 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="font-semibold text-slate-700">Progress Budget {data.bulanNama}</h3>
+              <p className="text-xs text-slate-400">
+                {fmtRp(data.totalKeluar)} digunakan dari {fmtRp(data.budget)}
+              </p>
+            </div>
+            <span className={`text-2xl font-bold ${
+              data.budgetPct >= 100 ? 'text-red-600'
+              : data.budgetPct >= 90 ? 'text-amber-600'
+              : data.budgetPct >= 75 ? 'text-yellow-600'
+              : 'text-emerald-600'
+            }`}>
+              {data.budgetPct}%
+            </span>
+          </div>
+          <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ${
+                data.budgetPct >= 100 ? 'bg-red-500'
+                : data.budgetPct >= 90 ? 'bg-amber-500'
+                : data.budgetPct >= 75 ? 'bg-yellow-400'
+                : 'bg-emerald-500'
+              }`}
+              style={{ width: `${data.budgetPct}%` }}
+            />
+          </div>
+          {data.sisaBudget < 0 && (
+            <p className="mt-2 text-xs font-semibold text-red-600 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Pengeluaran melebihi budget sebesar {fmtRp(Math.abs(data.sisaBudget))}
+            </p>
+          )}
+          {data.prediksiAkhir > 0 && data.budget > 0 && data.sisaHari > 0 && (
+            <p className="mt-1.5 text-xs text-slate-400 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-blue-400" />
+              Prediksi pengeluaran akhir bulan: {fmtRp(data.prediksiAkhir)}
+              {data.prediksiAkhir > data.budget && (
+                <span className="text-red-500 font-medium ml-1">(⚠️ akan melebihi budget!)</span>
+              )}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* ── CHARTS ──────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+
+        {/* Area Chart - 7 Hari */}
+        <div className="lg:col-span-3 bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="font-bold text-slate-800">Arus Kas 7 Hari Terakhir</h2>
+              <p className="text-xs text-slate-400">Pengeluaran & Pemasukan harian</p>
+            </div>
+            <Clock className="w-4 h-4 text-slate-300" />
+          </div>
+          {data.dailyData.some(d => d.keluar > 0 || d.masuk > 0) ? (
+            <div className="h-52">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={data.dailyData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="colorKeluar" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="colorMasuk" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    tickFormatter={fmtShort}
+                  />
+                  <RechartsTooltip content={<CustomTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="keluar"
+                    name="Pengeluaran"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                    fill="url(#colorKeluar)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="masuk"
+                    name="Pemasukan"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    fill="url(#colorMasuk)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '12px', paddingTop: '8px' }}
+                    formatter={(val) => (
+                      <span className="text-slate-500">{val}</span>
+                    )}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <div className="h-52 flex flex-col items-center justify-center text-slate-300 gap-2">
+              <Activity className="w-10 h-10" />
+              <p className="text-sm">Belum ada transaksi minggu ini</p>
+            </div>
+          )}
+        </div>
+
+        {/* Pie Chart - Kategori */}
+        <div className="lg:col-span-2 bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+          <div className="mb-4">
+            <h2 className="font-bold text-slate-800">Distribusi Kategori</h2>
+            <p className="text-xs text-slate-400">Pengeluaran bulan ini</p>
+          </div>
           {data.pieData.length > 0 ? (
-            <div className="h-64 md:h-72">
+            <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data.pieData}
                     cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
+                    cy="45%"
+                    innerRadius={48}
+                    outerRadius={72}
+                    paddingAngle={3}
                     dataKey="value"
                   >
-                    {data.pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    {data.pieData.map((_, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                        stroke="none"
+                      />
                     ))}
                   </Pie>
-                  <RechartsTooltip 
-                    formatter={(value) => `Rp ${value.toLocaleString('id-ID')}`} 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                  <RechartsTooltip
+                    formatter={(value) => [fmtRp(value), '']}
+                    contentStyle={{
+                      borderRadius: '12px',
+                      border: 'none',
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                      fontSize: '12px'
+                    }}
                   />
-                  <Legend verticalAlign="bottom" height={36}/>
+                  <Legend
+                    verticalAlign="bottom"
+                    height={36}
+                    wrapperStyle={{ fontSize: '11px' }}
+                    formatter={(val) => (
+                      <span className="text-slate-500 truncate max-w-[80px] inline-block">{val}</span>
+                    )}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <div className="h-72 flex flex-col items-center justify-center text-slate-400">
-              <Target className="w-12 h-12 mb-3 text-slate-300" />
-              <p>Belum ada pengeluaran bulan ini</p>
-            </div>
-          )}
-        </div>
-
-        {/* Minimal Bar Chart - Top Kategori */}
-        <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 lg:border-slate-100">
-          <h2 className="text-base md:text-lg font-bold text-slate-800 mb-4 md:mb-6">Kategori Terbesar</h2>
-          {data.pieData.length > 0 ? (
-            <div className="h-64 md:h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.pieData.slice(0, 5)} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} fontSize={12} width={80} />
-                  <RechartsTooltip 
-                     formatter={(value) => `Rp ${value.toLocaleString('id-ID')}`}
-                     cursor={{fill: '#f1f5f9'}}
-                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={24}>
-                    {data.pieData.slice(0, 5).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          ) : (
-            <div className="h-72 flex text-slate-400 items-center justify-center">
-              Tidak ada data
+            <div className="h-52 flex flex-col items-center justify-center text-slate-300 gap-2">
+              <Target className="w-10 h-10" />
+              <p className="text-sm">Belum ada pengeluaran</p>
             </div>
           )}
         </div>
       </div>
+
+      {/* ── KATEGORI BREAKDOWN ───────────────────────────────────── */}
+      {data.pieData.length > 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h2 className="font-bold text-slate-800">Rincian per Kategori</h2>
+              <p className="text-xs text-slate-400">Proporsi pengeluaran bulan ini</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {data.pieData.slice(0, 6).map((item, i) => {
+              const pct = data.totalKeluar > 0
+                ? Math.round((item.value / data.totalKeluar) * 100)
+                : 0;
+              return (
+                <div key={item.name} className="flex flex-col gap-1.5 p-3 rounded-xl bg-slate-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: COLORS[i % COLORS.length] }}
+                      />
+                      <span className="text-sm font-medium text-slate-700 truncate">{item.name}</span>
+                    </div>
+                    <span className="text-xs font-bold text-slate-500">{pct}%</span>
+                  </div>
+                  <MiniBar
+                    value={item.value}
+                    max={data.totalKeluar}
+                    color={`bg-[${COLORS[i % COLORS.length]}]`}
+                  />
+                  <p className="text-xs text-slate-400 text-right">{fmtRp(item.value)}</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── BAR CHART Top 5 Kategori ─────────────────────────────── */}
+      {data.pieData.length > 0 && (
+        <div className="bg-white border border-slate-100 rounded-2xl shadow-sm p-5">
+          <div className="mb-5">
+            <h2 className="font-bold text-slate-800">Top 5 Pengeluaran Terbesar</h2>
+            <p className="text-xs text-slate-400">Kategori dengan pengeluaran terbanyak</p>
+          </div>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={data.pieData.slice(0, 5)}
+                layout="vertical"
+                margin={{ top: 0, right: 30, left: 10, bottom: 0 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                <XAxis
+                  type="number"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  tickFormatter={fmtShort}
+                />
+                <YAxis
+                  dataKey="name"
+                  type="category"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#64748b', fontSize: 11 }}
+                  width={100}
+                />
+                <RechartsTooltip
+                  formatter={(value) => [fmtRp(value), 'Pengeluaran']}
+                  contentStyle={{
+                    borderRadius: '12px',
+                    border: 'none',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    fontSize: '12px'
+                  }}
+                  cursor={{ fill: '#f8fafc' }}
+                />
+                <Bar dataKey="value" radius={[0, 6, 6, 0]} barSize={20}>
+                  {data.pieData.slice(0, 5).map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUICK SUMMARY FOOTER ─────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {[
+          {
+            label: 'Rata-rata/hari',
+            value: fmtShort(data.rataHari),
+            icon: '📅',
+            sub: 'Pengeluaran harian',
+          },
+          {
+            label: 'Prediksi akhir bulan',
+            value: fmtShort(data.prediksiAkhir),
+            icon: '🔮',
+            sub: data.budget > 0
+              ? data.prediksiAkhir > data.budget ? '⚠️ Melebihi budget' : '✅ Dalam budget'
+              : 'Berdasarkan rata-rata',
+          },
+          {
+            label: 'Sisa hari',
+            value: `${data.sisaHari} hari`,
+            icon: '⏳',
+            sub: `Hingga akhir ${data.bulanNama}`,
+          },
+          {
+            label: 'Jml transaksi',
+            value: data.txCount,
+            icon: '🧾',
+            sub: `Bulan ${data.bulanNama}`,
+          },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="bg-white border border-slate-100 rounded-xl shadow-sm p-4 text-center"
+          >
+            <p className="text-2xl mb-1">{item.icon}</p>
+            <p className="text-lg font-bold text-slate-800">{item.value}</p>
+            <p className="text-xs font-medium text-slate-500">{item.label}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{item.sub}</p>
+          </div>
+        ))}
+      </div>
+
     </div>
   );
 }
