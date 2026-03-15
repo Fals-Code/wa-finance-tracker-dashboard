@@ -1,7 +1,7 @@
 "use client";
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, List, Target, LogOut, Wallet, X, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, List, Target, LogOut, Wallet, X, TrendingUp, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export default function Sidebar({ isOpen, setOpen }) {
@@ -18,6 +18,8 @@ export default function Sidebar({ isOpen, setOpen }) {
     { name: 'Ringkasan',  path: '/dashboard',             icon: LayoutDashboard },
     { name: 'Transaksi',  path: '/dashboard/transaksi',   icon: List },
     { name: 'Budget',     path: '/dashboard/budget',       icon: Target },
+    { name: 'Target Tabungan', path: '/dashboard/goals',    icon: Wallet },
+    { name: 'Tagihan Bersama', path: '/dashboard/split',   icon: Users },
   ];
 
   const handleLogout = () => {

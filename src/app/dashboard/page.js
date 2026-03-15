@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import {
   ArrowDownRight, ArrowUpRight, Wallet, Target,
   TrendingUp, TrendingDown, Calendar, Activity,
-  AlertTriangle, CheckCircle2, Clock, Zap
+  AlertTriangle, CheckCircle2, Clock, Zap, Brain, Heart, Sparkles
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, ResponsiveContainer,
@@ -54,6 +54,97 @@ function BudgetBadge({ pct }) {
     <span className="inline-flex items-center gap-1 text-xs font-semibold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
       <CheckCircle2 className="w-3 h-3" /> Aman · {pct}%
     </span>
+  );
+}
+
+function HealthScoreCard({ score, savingRate }) {
+  const getLabel = (s) => {
+    if (s >= 80) return { text: 'Sangat Sehat', color: 'text-emerald-600', bg: 'bg-emerald-50' };
+    if (s >= 60) return { text: 'Cukup Sehat', color: 'text-blue-600', bg: 'bg-blue-50' };
+    if (s >= 40) return { text: 'Perlu Perhatian', color: 'text-amber-600', bg: 'bg-amber-50' };
+    return { text: 'Kurang Sehat', color: 'text-red-600', bg: 'bg-red-50' };
+  };
+  const label = getLabel(score);
+
+  return (
+    <div className={`rounded-2xl border p-5 flex flex-col gap-4 shadow-sm ${label.bg} border-current opacity-90`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-white rounded-lg shadow-sm">
+            <Heart className={`w-5 h-5 ${label.color} fill-current`} />
+          </div>
+          <h3 className="font-bold text-slate-800">Financial Health</h3>
+        </div>
+        <div className={`text-2xl font-black ${label.color}`}>{score}/100</div>
+      </div>
+      
+      <div className="space-y-2">
+        <div className="flex justify-between text-xs font-medium text-slate-600">
+          <span>{label.text}</span>
+          <span>Saving Rate: {savingRate}%</span>
+        </div>
+        <div className="h-2 bg-white/50 rounded-full overflow-hidden">
+          <div 
+            className={`h-full transition-all duration-1000 ${score >= 60 ? 'bg-emerald-500' : score >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} 
+            style={{ width: `${score}%` }} 
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BrainyInsights({ data }) {
+  const insights = [
+    {
+      title: 'Peluang Nabung',
+      desc: `Bulan ini kamu sudah menyisihkan ${data.health.savingRate}% pendapatan. Mantap!`,
+      icon: TrendingUp,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50'
+    },
+    {
+      title: 'Prediksi Pengeluaran',
+      desc: `Di akhir bulan nanti, total pengeluaranmu diprediksi ${fmtRp(data.prediksiAkhir)}.`,
+      icon: Zap,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50'
+    }
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col gap-6 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+          <Brain className="w-5 h-5" />
+        </div>
+        <div>
+          <h3 className="font-bold text-slate-800">Brainy Insights</h3>
+          <p className="text-xs text-slate-500">Analisis otomatis oleh AI</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {insights.map((item, i) => (
+          <div key={i} className={`p-4 rounded-xl border border-transparent hover:border-slate-100 transition-all ${item.bg}`}>
+            <div className="flex items-start gap-3">
+              <div className={`mt-1 p-1.5 rounded-lg bg-white shadow-sm ${item.color}`}>
+                <item.icon className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 mb-1">{item.title}</h4>
+                <p className="text-xs text-slate-600 leading-relaxed">{item.desc}</p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <button className="flex items-center justify-center gap-2 py-3 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm rounded-xl transition-all border border-slate-200">
+        <Sparkles className="w-4 h-4 text-indigo-500" />
+        Tanya Detail ke AI Coach
+      </button>
+    </div>
   );
 }
 
@@ -238,12 +329,33 @@ export default function DashboardOverview() {
       // Prediksi akhir bulan
       const prediksiAkhir = rataHari * lastDayOfMonth;
 
+      // --- NEW: Financial Health Score Calculation ---
+      // Saving Rate (40%)
+      const savingRateVal = totalMasuk > 0 ? Math.max(0, (totalMasuk - totalKeluar) / totalMasuk) : 0;
+      const savingScore = Math.min(40, savingRateVal * 100 * 0.4 * 2);
+
+      // Budget Discipline (30%)
+      let budgetScore = 30;
+      if (budget > 0) {
+        const usage = totalKeluar / budget;
+        if (usage > 1) budgetScore = Math.max(0, 30 - (usage - 1) * 30);
+        else if (usage > 0.9) budgetScore = 20;
+      }
+
+      // Activity (30%)
+      const activityScore = Math.min(30, (rows.length / 20) * 30);
+      const totalScore = Math.round(savingScore + budgetScore + activityScore);
+
       setData({
         saldo, totalMasuk, totalKeluar,
         budget, budgetPct, sisaBudget,
         pieData, dailyData,
         bulanNama, sisaHari, rataHari, prediksiAkhir,
         txCount: rows.length,
+        health: {
+          score: totalScore,
+          savingRate: Math.round(savingRateVal * 100)
+        }
       });
       setLoading(false);
     }
