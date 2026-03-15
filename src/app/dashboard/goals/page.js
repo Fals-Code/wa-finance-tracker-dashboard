@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { 
   Target, Wallet, Calendar, Plus, 
-  ChevronRight, Trophy, TrendingUp, AlertCircle 
+  ChevronRight, Trophy, TrendingUp, AlertCircle, X 
 } from 'lucide-react';
 
 const fmtRp = (val) =>
@@ -16,6 +16,12 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [waId, setWaId] = useState('');
+  
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newTarget, setNewTarget] = useState('');
+  const [issubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const id = localStorage.getItem('wa_session');
@@ -44,6 +50,36 @@ export default function GoalsPage() {
     }
   }
 
+  async function handleSubmit(e) {
+    e.preventDefault();
+    if (!newName || !newTarget) return;
+
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('saving_goals')
+        .insert({
+          wa_number: waId,
+          name: newName,
+          target_amount: parseInt(newTarget),
+          current_amount: 0,
+          is_completed: false,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) throw error;
+      
+      setNewName('');
+      setNewTarget('');
+      setIsModalOpen(false);
+      fetchGoals(waId);
+    } catch (err) {
+      alert('Gagal membuat target: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -53,7 +89,7 @@ export default function GoalsPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 relative">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -66,7 +102,10 @@ export default function GoalsPage() {
           </h1>
           <p className="text-slate-500 mt-2 font-medium">Wujudkan impianmu dengan menabung secara disiplin</p>
         </div>
-        <button className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-100 active:scale-95">
+        <button 
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-bold transition-all shadow-lg shadow-indigo-100 active:scale-95"
+        >
           <Plus className="w-5 h-5" />
           Target Baru
         </button>
@@ -173,6 +212,69 @@ export default function GoalsPage() {
           })
         )}
       </div>
+
+      {/* Modal Overlay */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-8">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Plus className="w-6 h-6" />
+                  </div>
+                  <h2 className="text-2xl font-black text-slate-800">Buat Target Baru</h2>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nama Impian</label>
+                  <input 
+                    type="text" 
+                    required
+                    autoFocus
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Contoh: Laptop Baru, Menikah"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Target Dana (Rp)</label>
+                  <input 
+                    type="number" 
+                    required
+                    value={newTarget}
+                    onChange={(e) => setNewTarget(e.target.value)}
+                    placeholder="Contoh: 5000000"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium"
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className="flex-1 py-3 px-6 rounded-2xl font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+                  >
+                    Batal
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={issubmitting}
+                    className="flex-1 py-3 px-6 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                    {issubmitting ? 'Menyimpan...' : 'Simpan Target'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tips Section */}
       <div className="bg-indigo-50 rounded-3xl p-8 flex flex-col md:flex-row items-center gap-6 border border-indigo-100">
