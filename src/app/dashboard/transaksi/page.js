@@ -184,8 +184,8 @@ export default function TransaksiPage() {
         )}
       </div>
 
-      {/* ── TABLE ─────────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden">
+      {/* ── TABLE (Desktop) ─────────────────────────────────────────────────── */}
+      <div className="bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden hidden md:block">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
@@ -246,8 +246,54 @@ export default function TransaksiPage() {
             </tbody>
           </table>
         </div>
+      </div>
 
-        {/* Pagination */}
+      {/* ── LIST (Mobile) ─────────────────────────────────────────────────── */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex gap-3 animate-pulse">
+              <div className="w-10 h-10 bg-slate-200 rounded-full shrink-0"></div>
+              <div className="flex-1 space-y-2">
+                <div className="w-3/4 h-4 bg-slate-200 rounded"></div>
+                <div className="w-1/2 h-3 bg-slate-200 rounded"></div>
+              </div>
+            </div>
+          ))
+        ) : paginated.length > 0 ? (
+          paginated.map(t => (
+            <div key={t.id} className="bg-white p-4 rounded-xl shadow-sm border border-slate-100 flex items-center gap-3 relative overflow-hidden">
+               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${t.tipe === 'masuk' ? 'bg-emerald-100 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
+                 {t.tipe === 'masuk' ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+               </div>
+               <div className="flex-1 min-w-0">
+                 <p className="font-semibold text-slate-800 text-sm truncate">
+                   {t.judul || t.nama_toko || t.deskripsi || '—'}
+                 </p>
+                 <div className="flex items-center gap-2 mt-1">
+                   <p className="text-[11px] text-slate-400 font-medium">
+                     {new Date(t.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: '2-digit' })}
+                   </p>
+                   <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                   <p className="text-[11px] text-slate-500 truncate">{t.kategori || 'Lain-lain'}</p>
+                 </div>
+               </div>
+               <div className="text-right shrink-0">
+                 <p className={`font-bold tabular-nums text-sm ${t.tipe === 'masuk' ? 'text-emerald-600' : 'text-slate-800'}`}>
+                   {t.tipe === 'masuk' ? '+' : ''}Rp {parseInt(t.nominal).toLocaleString('id-ID')}
+                 </p>
+               </div>
+            </div>
+          ))
+        ) : (
+          <div className="bg-white p-6 rounded-xl border border-slate-100 text-center">
+             <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+             <p className="font-medium text-slate-600 text-sm">Tidak ada transaksi</p>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
         {!loading && totalPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
             <p className="text-xs text-slate-400">
@@ -271,7 +317,6 @@ export default function TransaksiPage() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
