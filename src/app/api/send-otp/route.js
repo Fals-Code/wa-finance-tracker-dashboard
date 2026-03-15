@@ -28,7 +28,7 @@ export async function POST(request) {
     const { data: users, error: dbError } = await supabase
       .from("user_profiles")
       .select("wa_number, authcode_created_at")
-      .or(`wa_number.eq.${waNumber}@c.us,wa_number.ilike.${waNumber}%`)
+      .or(`wa_number.eq."${waNumber}@c.us",wa_number.eq."${waNumber}@lid",wa_number.ilike."${waNumber}%"`)
       .limit(1);
 
     if (dbError) {
