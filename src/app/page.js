@@ -157,7 +157,7 @@ function LoginContent() {
               type="text"
               value={waNumber}
               onChange={(e) => setWaNumber(e.target.value)}
-              placeholder="08123456789 atau 628123456789"
+              placeholder="Masukkan nomor WhatsApp"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl text-slate-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
               required
             />
